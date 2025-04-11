@@ -386,8 +386,8 @@ async def mine_rules(
     min_confidence: float = Form(0.1, description="Minimum confidence threshold"),
     max_rules: int = Form(20, description="Maximum number of rules to return"),
     sheet_name: str = Form(..., description="Excel sheet name"),
-    item_column: str = Form(..., description="Column containing item names"),
-    transaction_column: str = Form(..., description="Column containing transaction IDs")
+    item_column: str = Form("ITEMNAME", description="Column containing item names"),
+    transaction_column: str = Form("BILLNO", description="Column containing transaction IDs")
 ):
     try:
         logger.info(f"Processing rules with params: support={min_support}, confidence={min_confidence}, sheet={sheet_name}")
@@ -398,15 +398,18 @@ async def mine_rules(
         # Log data shape
         logger.info(f"Data shape: {df.shape}")
         
+        # Always use ITEMNAME column if available, otherwise use provided item_column
+        if "ITEMNAME" in df.columns:
+            item_column = "ITEMNAME"
+            logger.info("Using ITEMNAME column for product identification")
+        else:
+            logger.info(f"ITEMNAME column not found, using provided column: {item_column}")
+            
         # Ensure required columns exist
         if item_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Item column '{item_column}' not found")
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
-        
-        # Respect user's column choice but log the choice
-        original_item_column = item_column
-        logger.info(f"Using item column: {item_column}")
             
         # Print unique values in the item column (first 10) for verification
         unique_items = df[item_column].unique()
