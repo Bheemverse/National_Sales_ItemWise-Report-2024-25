@@ -155,6 +155,8 @@ async def mine_rules(
         df = df[[transaction_column, item_column]].dropna()
         df['value'] = 1
         basket = pd.crosstab(df[transaction_column], df[item_column])
+        basket = (basket > 0).astype(int)  # ✅ Make it binary
+
 
         frequent_itemsets = apriori(basket, min_support=min_support, use_colnames=True)
 
