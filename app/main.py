@@ -154,14 +154,23 @@ async def mine_rules(
 
         df = df[[transaction_column, item_column]].dropna()
         df['value'] = 1
-        basket = pd.crosstab(df[transaction_column], df[item_column])
-        basket = (basket > 0).astype(int)  # ✅ Make it binary
 
+        # 🧠 Crosstab
+        basket = pd.crosstab(df[transaction_column], df[item_column])
+        basket = (basket > 0).astype(int)
+
+        # ✅ Log shape info
+        print(f"🚀 Transactions: {basket.shape[0]}")
+        print(f"🧾 Unique Items: {basket.shape[1]}")
 
         frequent_itemsets = apriori(basket, min_support=min_support, use_colnames=True)
 
+        print(f"✅ Frequent itemsets found: {len(frequent_itemsets)}")
+
         if not frequent_itemsets.empty:
             rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
+            print(f"🔗 Association rules generated: {len(rules)}")
+
             rules_list = []
             for _, rule in rules.head(max_rules).iterrows():
                 rules_list.append({
@@ -177,6 +186,7 @@ async def mine_rules(
 
     except Exception as e:
         return [{"antecedents": ["Error"], "consequents": [str(e)], "support": 0, "confidence": 0, "lift": 0}]
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
