@@ -404,6 +404,12 @@ async def mine_rules(
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
         
+        # Ensure we're using ITEMNAME only
+        logger.info(f"Using item column: {item_column}")
+        if item_column != "ITEMNAME" and "ITEMNAME" in df.columns:
+            logger.warn(f"The provided item_column '{item_column}' is not 'ITEMNAME'. Switching to 'ITEMNAME'.")
+            item_column = "ITEMNAME"
+            
         # Filter only needed columns for efficiency
         df = df[[transaction_column, item_column]].dropna()
         logger.info(f"After filtering: {df.shape}")
@@ -441,7 +447,8 @@ async def mine_rules(
                 antecedents = list(rule['antecedents'])
                 consequents = list(rule['consequents'])
                 
-                if len(antecedents) == 1:  # Focus on single-item antecedents
+                # Ensure we're only working with single-item antecedents for clear recommendations
+                if len(antecedents) == 1:
                     product = antecedents[0]
                     
                     if product not in product_to_rules:
