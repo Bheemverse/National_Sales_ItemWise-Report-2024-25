@@ -150,10 +150,14 @@ async def mine_rules(
             raise HTTPException(status_code=400, detail=f"Item column '{item_column}' not found")
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
-        if "ITEMNAME" not in df.columns:
-            raise HTTPException(status_code=400, detail="Missing 'ITEMNAME' column for name mapping.")
 
-        item_map = df[[item_column, "ITEMNAME"]].drop_duplicates().set_index(item_column)["ITEMNAME"].to_dict()
+        if item_column.lower() == "itemname":
+            def name_lookup(code): return str(code)
+        elif "ITEMNAME" in df.columns:
+            item_map = df[[item_column, "ITEMNAME"]].drop_duplicates().set_index(item_column)["ITEMNAME"].to_dict()
+            def name_lookup(code): return item_map.get(code, str(code))
+        else:
+            raise HTTPException(status_code=400, detail="Missing 'ITEMNAME' column for name mapping.")
 
         df = df[[transaction_column, item_column]].dropna()
         df['value'] = 1
@@ -167,8 +171,8 @@ async def mine_rules(
 
             rules_list = []
             for _, rule in rules.head(max_rules).iterrows():
-                antecedents = [item_map.get(code, str(code)) for code in rule['antecedents']]
-                consequents = [item_map.get(code, str(code)) for code in rule['consequents']]
+                antecedents = [name_lookup(code) for code in rule['antecedents']]
+                consequents = [name_lookup(code) for code in rule['consequents']]
 
                 rules_list.append({
                     "antecedents": antecedents,
