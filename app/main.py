@@ -196,20 +196,66 @@ async def mine_rules(
         if not frequent_itemsets.empty:
             rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
 
+            product_to_rules = {}
+            for _, rule in rules.iterrows():
+                antecedents = list(rule['antecedents'])
+                if len(antecedents) == 1:
+                    product = antecedents[0]
+                    if product not in product_to_rules:
+                        product_to_rules[product] = []
+                    product_to_rules[product].append({
+                        "antecedents": antecedents,
+                        "consequents": list(rule['consequents']),
+                        "support": float(rule['support']),
+                        "confidence": float(rule['confidence']),
+                        "lift": float(rule['lift'])
+                    })
+
+            all_products = df[item_column].unique()
+            for product in all_products:
+                if product not in product_to_rules or len(product_to_rules[product]) < 5:
+                    transactions_with_product = df[df[item_column] == product][transaction_column].unique()
+                    if len(transactions_with_product) > 0:
+                        co_occurring_items = df[
+                            (df[transaction_column].isin(transactions_with_product)) & 
+                            (df[item_column] != product)
+                        ][item_column].value_counts()
+
+                        total_transactions = df[transaction_column].nunique()
+                        product_transactions = len(transactions_with_product)
+
+                        additional_rules = []
+                        for co_item, count in co_occurring_items.items():
+                            if product in product_to_rules and any(co_item in rule['consequents'] for rule in product_to_rules[product]):
+                                continue
+
+                            support = count / total_transactions
+                            confidence = count / product_transactions
+
+                            co_item_transactions = df[df[item_column] == co_item][transaction_column].nunique()
+                            expected = (product_transactions / total_transactions) * (co_item_transactions / total_transactions)
+                            lift = (support / expected) if expected > 0 else 1.0
+
+                            additional_rules.append({
+                                "antecedents": [product],
+                                "consequents": [co_item],
+                                "support": float(support),
+                                "confidence": float(confidence),
+                                "lift": float(lift)
+                            })
+
+                        additional_rules.sort(key=lambda x: x['lift'], reverse=True)
+                        if product not in product_to_rules:
+                            product_to_rules[product] = []
+                        needed_rules = max(0, 5 - len(product_to_rules[product]))
+                        product_to_rules[product].extend(additional_rules[:needed_rules])
+
             rules_list = []
-            for _, rule in rules.head(max_rules).iterrows():
-                antecedents = [name_lookup(code) for code in rule['antecedents']]
-                consequents = [name_lookup(code) for code in rule['consequents']]
+            for product_rules in product_to_rules.values():
+                rules_list.extend(product_rules)
 
-                rules_list.append({
-                    "antecedents": antecedents,
-                    "consequents": consequents,
-                    "support": rule['support'],
-                    "confidence": rule['confidence'],
-                    "lift": rule['lift']
-                })
-
-            return rules_list
+            rules_list.sort(key=lambda x: x['lift'], reverse=True)
+            return rules_list[:max_rules] if max_rules > 0 else rules_list
         else:
             return []
 
