@@ -6,7 +6,6 @@ import uvicorn
 
 app = FastAPI(title="Association Rules Mining API", description="API for mining association rules from sales data")
 
-# Path to your Excel file
 EXCEL_FILE = "National_Sales_ItemWise Report 2024-25 (1).xlsx"
 
 @app.get("/", response_class=HTMLResponse)
@@ -151,42 +150,46 @@ async def mine_rules(
             raise HTTPException(status_code=400, detail=f"Item column '{item_column}' not found")
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
+        if "ITEMNAME" not in df.columns:
+            raise HTTPException(status_code=400, detail="Missing 'ITEMNAME' column for name mapping.")
+
+        item_map = df[[item_column, "ITEMNAME"]].drop_duplicates().set_index(item_column)["ITEMNAME"].to_dict()
 
         df = df[[transaction_column, item_column]].dropna()
         df['value'] = 1
-
-        # 🧠 Crosstab
         basket = pd.crosstab(df[transaction_column], df[item_column])
         basket = (basket > 0).astype(int)
 
-        # ✅ Log shape info
-        print(f"🚀 Transactions: {basket.shape[0]}")
-        print(f"🧾 Unique Items: {basket.shape[1]}")
-
         frequent_itemsets = apriori(basket, min_support=min_support, use_colnames=True)
-
-        print(f"✅ Frequent itemsets found: {len(frequent_itemsets)}")
 
         if not frequent_itemsets.empty:
             rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
-            print(f"🔗 Association rules generated: {len(rules)}")
 
             rules_list = []
             for _, rule in rules.head(max_rules).iterrows():
+                antecedents = [item_map.get(code, str(code)) for code in rule['antecedents']]
+                consequents = [item_map.get(code, str(code)) for code in rule['consequents']]
+
                 rules_list.append({
-                    "antecedents": list(rule['antecedents']),
-                    "consequents": list(rule['consequents']),
+                    "antecedents": antecedents,
+                    "consequents": consequents,
                     "support": rule['support'],
                     "confidence": rule['confidence'],
                     "lift": rule['lift']
                 })
+
             return rules_list
         else:
             return []
 
     except Exception as e:
-        return [{"antecedents": ["Error"], "consequents": [str(e)], "support": 0, "confidence": 0, "lift": 0}]
-
+        return [{
+            "antecedents": ["Error"],
+            "consequents": [str(e)],
+            "support": 0,
+            "confidence": 0,
+            "lift": 0
+        }]
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
