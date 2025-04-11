@@ -77,7 +77,7 @@ async def index():
                 </div>
                 <div class="form-group">
                     <label>Item Column Name:</label>
-                    <input type="text" name="item_column" value="ITEMCODE" required>
+                    <input type="text" name="item_column" value="ITEMNAME" required>
                 </div>
                 <div class="form-group">
                     <label>Transaction Column Name:</label>
