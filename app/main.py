@@ -71,6 +71,11 @@ async def index():
             th { background-color: #f2f2f2; }
             #loading { display: none; padding: 10px; background-color: #f8f9fa; margin-top: 10px; }
             .error { color: red; padding: 10px; border: 1px solid #ffcccc; background-color: #fff0f0; }
+            .filter-container { margin-top: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+            .search-container { display: flex; gap: 10px; }
+            .search-box { flex-grow: 1; }
+            .filtered-count { font-size: 0.9em; color: #666; margin-top: 5px; }
+            .highlight { background-color: #e6ffe6; }
         </style>
     </head>
     <body>
@@ -107,17 +112,21 @@ async def index():
             <div id="errorMsg" class="error" style="display:none;"></div>
             <div id="results" style="display:none;">
                 <h2>Association Rules</h2>
-                <div id="product-selector" style="margin-top: 20px; margin-bottom: 20px;">
+                <div class="filter-container">
                     <h3>Filter by Product</h3>
-                    <select id="productFilter" onchange="filterRules()">
-                        <option value="">Show All Products</option>
-                    </select>
+                    <div class="search-container">
+                        <input type="text" id="productSearch" class="search-box" placeholder="Search for a product..." oninput="filterProductDropdown()">
+                        <select id="productFilter" onchange="filterRulesByProduct()">
+                            <option value="">Show All Products</option>
+                        </select>
+                    </div>
+                    <div class="filtered-count" id="filteredCount"></div>
                 </div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Antecedents</th>
-                            <th>Consequents</th>
+                            <th>Product (Antecedent)</th>
+                            <th>Recommended Products (Consequents)</th>
                             <th>Support</th>
                             <th>Confidence</th>
                             <th>Lift</th>
@@ -130,6 +139,7 @@ async def index():
         <script>
             // Store all rules for filtering
             let allRules = [];
+            let allProducts = [];
             
             function submitForm(event) {
                 event.preventDefault();
@@ -173,6 +183,9 @@ async def index():
                     // Display rules
                     displayRules(data);
                     document.getElementById('results').style.display = 'block';
+                    
+                    // Clear search box
+                    document.getElementById('productSearch').value = '';
                 })
                 .catch(err => {
                     document.getElementById('loading').style.display = 'none';
@@ -188,26 +201,62 @@ async def index():
             }
             
             function populateProductFilter(rules) {
-                const products = new Set();
+                const productSet = new Set();
                 
+                // Extract all products that appear as antecedents
                 rules.forEach(rule => {
                     if (rule.antecedents && rule.antecedents.length === 1) {
-                        products.add(rule.antecedents[0]);
+                        productSet.add(rule.antecedents[0]);
                     }
                 });
                 
+                // Sort products alphabetically
+                allProducts = Array.from(productSet).sort();
+                
+                // Populate dropdown
+                updateProductDropdown(allProducts);
+            }
+            
+            function updateProductDropdown(products) {
                 const productSelect = document.getElementById('productFilter');
                 productSelect.innerHTML = '<option value="">Show All Products</option>';
                 
-                Array.from(products).sort().forEach(product => {
+                products.forEach(product => {
                     const option = document.createElement('option');
                     option.value = product;
                     option.textContent = product;
                     productSelect.appendChild(option);
                 });
+                
+                // Update filtered count
+                document.getElementById('filteredCount').textContent = 
+                    products.length === allProducts.length ? 
+                    `Showing all ${products.length} products` : 
+                    `Filtered: ${products.length} of ${allProducts.length} products`;
             }
             
-            function filterRules() {
+            function filterProductDropdown() {
+                const searchTerm = document.getElementById('productSearch').value.toLowerCase();
+                if (!searchTerm) {
+                    updateProductDropdown(allProducts);
+                    return;
+                }
+                
+                // Filter products based on search term
+                const filteredProducts = allProducts.filter(product => 
+                    product.toLowerCase().includes(searchTerm)
+                );
+                
+                updateProductDropdown(filteredProducts);
+                
+                // If only one product matches exactly, select it
+                if (filteredProducts.length === 1) {
+                    document.getElementById('productFilter').value = filteredProducts[0];
+                    filterRulesByProduct();
+                }
+            }
+            
+            function filterRulesByProduct() {
                 const selectedProduct = document.getElementById('productFilter').value;
                 
                 if (!selectedProduct) {
@@ -215,12 +264,17 @@ async def index():
                     return;
                 }
                 
+                // Filter rules where the selected product is an antecedent
                 const filteredRules = allRules.filter(rule => 
                     rule.antecedents.length === 1 && 
                     rule.antecedents[0] === selectedProduct
                 );
                 
                 displayRules(filteredRules);
+                
+                // Update the filtered count
+                document.getElementById('filteredCount').textContent = 
+                    `Showing ${filteredRules.length} rules for "${selectedProduct}"`;
             }
             
             function displayRules(rules) {
