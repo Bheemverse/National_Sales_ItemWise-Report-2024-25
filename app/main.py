@@ -404,12 +404,9 @@ async def mine_rules(
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
         
-        # FORCE USE OF ITEMNAME
-        if "ITEMNAME" in df.columns:
-            logger.info("Found ITEMNAME column, using it for association rules")
-            item_column = "ITEMNAME"
-        else:
-            logger.warn("ITEMNAME column not found. This might cause issues with product naming.")
+        # Respect user's column choice but log the choice
+        original_item_column = item_column
+        logger.info(f"Using item column: {item_column}")
             
         # Print unique values in the item column (first 10) for verification
         unique_items = df[item_column].unique()
@@ -417,7 +414,6 @@ async def mine_rules(
         
         # Filter only needed columns for efficiency
         df = df[[transaction_column, item_column]].dropna()
-        logger.info(f"After filtering: {df.shape}")
         
         # Create the basket format - use optimized method for larger datasets
         if df.shape[0] > 10000:
