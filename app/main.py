@@ -404,12 +404,17 @@ async def mine_rules(
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
         
-        # Ensure we're using ITEMNAME only
-        logger.info(f"Using item column: {item_column}")
-        if item_column != "ITEMNAME" and "ITEMNAME" in df.columns:
-            logger.warn(f"The provided item_column '{item_column}' is not 'ITEMNAME'. Switching to 'ITEMNAME'.")
+        # FORCE USE OF ITEMNAME
+        if "ITEMNAME" in df.columns:
+            logger.info("Found ITEMNAME column, using it for association rules")
             item_column = "ITEMNAME"
+        else:
+            logger.warn("ITEMNAME column not found. This might cause issues with product naming.")
             
+        # Print unique values in the item column (first 10) for verification
+        unique_items = df[item_column].unique()
+        logger.info(f"Sample of unique items from {item_column}: {', '.join(str(x) for x in unique_items[:10])}")
+        
         # Filter only needed columns for efficiency
         df = df[[transaction_column, item_column]].dropna()
         logger.info(f"After filtering: {df.shape}")
@@ -446,6 +451,10 @@ async def mine_rules(
             for _, rule in rules.iterrows():
                 antecedents = list(rule['antecedents'])
                 consequents = list(rule['consequents'])
+                
+                # Log a sample of the generated rules for debugging
+                if _ < 5:  # Log first 5 rules
+                    logger.info(f"Rule {_}: {antecedents} -> {consequents}")
                 
                 # Ensure we're only working with single-item antecedents for clear recommendations
                 if len(antecedents) == 1:
@@ -534,6 +543,10 @@ async def mine_rules(
             for product_rules in product_to_rules.values():
                 rules_list.extend(product_rules)
                 
+            # Log a sample of the final rules for debugging
+            for i, rule in enumerate(rules_list[:5]):
+                logger.info(f"Final rule {i}: {rule['antecedents']} -> {rule['consequents']}")
+            
             # Sort by lift and limit to max_rules
             rules_list.sort(key=lambda x: x["lift"], reverse=True)
             if max_rules > 0 and len(rules_list) > max_rules:
