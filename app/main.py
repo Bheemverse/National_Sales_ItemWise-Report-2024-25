@@ -331,19 +331,25 @@ async def index():
                         .then(response => response.json())
                         .then(colData => {
                             if (colData.column_names && colData.column_names.length > 0) {
-                                // Try to guess appropriate column names
-                                const itemCol = colData.column_names.find(col => 
-                                    col.toLowerCase().includes('item') || 
-                                    col.toLowerCase().includes('product') || 
-                                    col.toLowerCase().includes('name'));
+                                // Always try to use ITEMNAME if available
+                                if (colData.column_names.includes('ITEMNAME')) {
+                                    document.getElementById('item_column').value = 'ITEMNAME';
+                                } else {
+                                    // Fallback to any column containing 'item' or related terms
+                                    const itemCol = colData.column_names.find(col => 
+                                        col.toLowerCase().includes('item') || 
+                                        col.toLowerCase().includes('product') || 
+                                        col.toLowerCase().includes('name'));
                                     
+                                    if (itemCol) document.getElementById('item_column').value = itemCol;
+                                }
+                                
                                 const transCol = colData.column_names.find(col => 
                                     col.toLowerCase().includes('invoice') || 
                                     col.toLowerCase().includes('transaction') || 
                                     col.toLowerCase().includes('bill') ||
                                     col.toLowerCase().includes('order'));
                                     
-                                if (itemCol) document.getElementById('item_column').value = itemCol;
                                 if (transCol) document.getElementById('transaction_column').value = transCol;
                             }
                         })
