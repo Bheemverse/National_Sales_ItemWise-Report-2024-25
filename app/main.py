@@ -206,11 +206,33 @@ async def mine_rules(
         if transaction_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Transaction column '{transaction_column}' not found")
         
-        # Group by transaction and create a list of items for each transaction
-        basket = df.groupby([transaction_column])[item_column].apply(list).reset_index()
-        
-        # Convert to transaction format
-        transactions = basket[item_column].tolist()
+        # Create a binary matrix: 1 if item exists in a transaction
+df = df[[transaction_column, item_column]].dropna()
+
+# Crosstab-based encoding (alternative to TransactionEncoder)
+df['value'] = 1
+basket = pd.crosstab(df[transaction_column], df[item_column])
+
+# Apply Apriori algorithm
+frequent_itemsets = apriori(basket, min_support=min_support, use_colnames=True)
+
+# Generate rules if any frequent itemsets exist
+if not frequent_itemsets.empty:
+    rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
+    
+    rules_list = []
+    for _, rule in rules.head(max_rules).iterrows():
+        rules_list.append({
+            "antecedents": list(rule['antecedents']),
+            "consequents": list(rule['consequents']),
+            "support": rule['support'],
+            "confidence": rule['confidence'],
+            "lift": rule['lift']
+        })
+    return rules_list
+else:
+    return []
+
         
         # Encode the transactions
         te = TransactionEncoder()
